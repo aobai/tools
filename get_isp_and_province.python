@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import requests
+import json
+ip_dist_list = []
+
+hosts = 'http://10.235.25.78:5931'
+error_num = 0
+#content = '{"eventId":1586091321,"timestamp":1433952015,"interface":{"interfaceName":"query_province_isp","para":{"data_type":0,"ip_list":'
+
+totalIP = []
+with open("ip_list.csv") as f:
+    for line_terminated in f:
+        line = line_terminated.rstrip('\n')
+        totalIP.append(line)
+
+print("len ip:",len(totalIP))
+print(totalIP[0:50])
+max_num = 1000 
+epoches = (len(totalIP) / max_num) +1
+print("epoches:",epoches)
+#epoches = 3
+
+def constructRequestUrl(ipList):
+	content = '{"eventId":1586091321,"timestamp":1433952015,"interface":{"interfaceName":"query_province_isp","para":{"data_type":0,"ip_list":'
+	ip_string = "["
+	num =0
+	for i  in  ipList:
+	        print("i:",i)
+	        num = num + 1;
+	        if num == len(ipList):
+	                ip_string += '"' + str(i) + '"'+']'  + '}}}'
+	                break
+	        ip_string += '"' + str(i) + '",'
+	#print(ip_string)
+	content = content+ip_string
+	print(content)
+	
+	return content
+
+
+def parseResult(json_string):
+	parsed_json = json.loads(json_string)	
+	returnValue = parsed_json['returnValue']
+	returnMessage = parsed_json['returnMessage']
+
+	if returnValue != 0:
+		error_num = error_num + 1
+		print("returnValue:",returnValue)
+		exit()
+
+	returnData = parsed_json["returnData"]
+	ip_count = returnData['ip_count']
+
+	info_content = returnData['info']
+	for i in range(len(info_content)):
+		info  = info_content[i]
+		int_ip = info["int_ip"]
+		ip = info["ip"]
+		isp_id = info["isp_id"]
+		pro_id = info["pro_id"]
+
+		elem = {}
+		elem["int_ip"] = int_ip
+		elem["ip"] = ip
+		elem["isp_id"] = isp_id
+		elem["pro_id"] = pro_id
+		ip_dist_list.append(elem)
+
+
+
+
+for index in range(epoches):
+	print(index*max_num,(index+1)*max_num)
+	print(totalIP[index*max_num:(index+1)*max_num])
+		
+	r = requests.post(hosts, constructRequestUrl(totalIP[index*max_num:(index+1)*max_num]))
+	print(r.status_code, r.reason)
+	print(r.text.encode('ascii', 'ignore'))
+	json_string = r.text.encode('ascii', 'ignore')
+
+	if r.status_code != 200:
+		print("unknown err")
+		error_num = error_num +1
+		exit()
+	
+	parseResult(json_string)
+
+
+
+
+print("ip_dist_list:",ip_dist_list)
+print("error_num:",error_num)
+print("ip_dist_list.len:",len(ip_dist_list))
+print("len ip:",len(totalIP))
+
+
+
+import csv
+with open('/tmp/fuckaaa', 'a') as outcsv: 
+ 	#configure writer to write standard csv file
+ 	#writer = csv.writer(outcsv, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL, lineterminator='n')
+ 	writer = csv.writer(outcsv, delimiter=',')
+ 	writer.writerow(['province', 'isp', 'int_ip','ip'])
+ 	for item in ip_dist_list:
+	 	#Write item to outcsv
+	 	writer.writerow([item['pro_id'], item['isp_id'],item['int_ip'],item['ip']])
